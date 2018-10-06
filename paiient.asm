@@ -63,6 +63,7 @@ Multiplicand1     = $53
 Divisor           = $54
 Multiplicand2     = $55
 
+BackupColor       = $C0
 
 Vram_Lo           = $EB
 Vram_Hi           = $EC
@@ -97,7 +98,7 @@ Startup:
   lda #CENTER_Y
   sta PositionY
   jsr ComputeVRAMAddress
-  lda #$01
+  lda #$03
   sta CurrentColor
   sta ColorPending
   jsr WritePixelValue
@@ -112,6 +113,9 @@ ClearKBStrobeIfHit:
   jsr Delay
   sta KEYBOARD_STROBE
 NoKBHit:
+  jsr BlinkCursorOff
+  jsr Delay
+  jsr BlinkCursorOn
   jmp RunLoop
   rts
 
@@ -136,7 +140,7 @@ DelayLoop:
 
 ;************************************************************
 ; END Delay
-;************************************************************  
+;************************************************************
 
   
 ;************************************************************
@@ -842,6 +846,33 @@ ToNextAdd:
   bne AddTextLineOffset
 EndDetermineTextAreaAddr:  
   rts
+
+  ; if current color is not 0 (black):
+  ;   
+BlinkCursorOn:
+  lda BackupColor
+  sta CurrentColor
+  jsr WritePixelValue
+  rts
+  
+BlinkCursorOff:
+  lda CurrentColor
+  sta BackupColor
+  beq BlackToWhite
+  cmp #$80
+  beq BlackToWhite
+  
+  and #$80
+  ora #$00
+DoColorWrite:  
+  sta CurrentColor
+  jsr WritePixelValue
+  rts
+BlackToWhite:
+  and #$80
+  ora #$03
+  bne DoColorWrite
+  
   
 ; data
 ColorPrompt:
