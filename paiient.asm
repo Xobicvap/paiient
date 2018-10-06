@@ -14,6 +14,7 @@ KEYBOARD_STROBE   = $C010
 GRAPHICS_ON       = $C050
 GRAPHICS_OFF      = $C051
 HIRES_FULLSCREEN  = $C052
+HIRES_MIXED       = $C053
 HIRES_PAGE1       = $C054
 HIRES_ON          = $C057
 
@@ -28,12 +29,27 @@ BLACK             = $00
 COLOR1            = $01
 COLOR2            = $02
 WHITE             = $03
+MIXED_TEXT_LO     = $50
+MIXED_TEXT_HI     = $06
+BLINKY_SPACE      = $60
+SPACE             = $A0
+COLON             = $BA
+
+; text variables
+TextPtr_Lo        = $C0
+TextPtr_Hi        = $C1
+TextAddr_Lo       = $C2
+TextAddr_Hi       = $C3
+LineNumber        = $C4
+
 
 ; zero page RAM locations
 BoxAddrOffset_Lo  = $06
 BoxAddrOffset_Hi  = $07
 BoxSetStart_Lo    = $08
+VramOffset        = $08
 LineOffset        = $09
+VramWork          = $09
 LineInBox         = $1E
 
 ; storage for math routines; some are conserved to save ZP space
@@ -47,6 +63,7 @@ Multiplicand1     = $53
 Divisor           = $54
 Multiplicand2     = $55
 
+
 Vram_Lo           = $EB
 Vram_Hi           = $EC
 PositionX         = $ED
@@ -54,7 +71,8 @@ PositionY         = $EE
 PixelLoc          = $EF
 CurrentColor      = $FA
 ColorWorkValue    = $FB
-KeyboardValue     = $FC
+ColorPending      = $FC
+KeyboardValue     = $FD
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; code
@@ -72,6 +90,8 @@ Startup:
   lda HIRES_ON
   lda HIRES_PAGE1
   
+  jsr ClearTextArea
+  
   lda #CENTER_X
   sta PositionX
   lda #CENTER_Y
@@ -79,9 +99,13 @@ Startup:
   jsr ComputeVRAMAddress
   lda #$01
   sta CurrentColor
+  sta ColorPending
   jsr WritePixelValue
 RunLoop:
   jsr ReadKeyboard
+  jsr MenuHandler
+ClearKBStrobeIfHit:  
+; was there a keyboard hit that was processed?  
   lda KeyboardValue
   and #$80
   beq NoKBHit
@@ -341,116 +365,171 @@ ComputeVRAMAddress:
 ; END ComputeVRAMAddress
 ;************************************************************  
 
+
 ;************************************************************
 ; WritePixelValue
 ;
-; (destroys A,X,Y (sorry!)
-;   1. load PixelLoc computed during TranslateXPosition
-;   2. is PixelLoc == 3?
-;     yes: branch to set 3rd pixel (which is different logic
-;       entirely because it's part of BOTH bytes in a blop)
-;   3. is PixelLoc > 3?
-;     yes: branch to set pixel for pixels 4-6 (in byte 2 of blop)
-;     no: continue, set pixel for pixels 0-2
+; (destroys A,X,Y)
 ;
-;   pixels 0-2:
-;     get current color, store in work value
-;     get PixelLoc; if this is 0, write pixel 1
-;     otherwise, set X to PixelLoc (1 or 2), 
+; A is pixel location (0, 1, 10, 100, 101, 110)
+; vram offset = A >>, A >> (i.e. if 100, offset is 1, aka high byte)
+; if pixel loc (from Y reg) & 11 is non-zero, shift color left X times,
+; where X = pixel loc (01 or 10 after above)
+; this gives the value to set. for example:
+; color = 10, pixel = 101:
+;   101 & 11 = 1; x = 1, for x > 0; x--: asl *2
+;   thus 10 << << = 1000
+; "but wait!" you say. "that's wrong for pixel 5, which is in the high byte!"
+; you're right! so, A = vram offset, if non-zero (1), shift left one more time
+;
+; now we calculate the bit mask so that we preserve everything at this vram byte
+; except the two bits we are going to overwrite
+; the bit mask is 11 shifted left once for every pixel (like above; 0 is no shift,
+; 1 is 1 shift, etc..) plus once more if we're in the high byte
+; then we apply the bit mask to the vram byte via an &, | that value with the
+; color work value, then write it to vram
 ;************************************************************  
-  
-WritePixelValue:
-  lda PixelLoc
-  cmp #$03
-  beq Pixel3
-  bpl ShiftLoop4through6
-  
-ShiftLoop0through2:
-  lda CurrentColor
-  sta ColorWorkValue
-  lda PixelLoc
-  beq WritePixel1
-  tax  
-  lda CurrentColor
-ShiftLoop:  
-  and #$7f  
-  asl
-  asl
-  dex
-  bne ShiftLoop  
-  sta ColorWorkValue
-WritePixel1:  
-  ldy #$00
-  lda (Vram_Lo), y
-  ora ColorWorkValue
-  sta (Vram_Lo), y
-  rts
-  
-ShiftLoop4through6:
-  lda CurrentColor
-  asl
-  sta ColorWorkValue
-  lda PixelLoc
-  and #$03 ; 100 & 11 = 0, 101 & 11 = 1, 110 & 11 = 10
-  tax
-  beq WritePixel2
-  lda ColorWorkValue
-ShiftLoop2:  
-  asl
-  asl
-  dex
-  bne ShiftLoop2
-  sta ColorWorkValue
-WritePixel2:  
-  ldy #$01
-  lda (Vram_Lo), y
-  ora ColorWorkValue
-  sta (Vram_Lo), y
-  rts
-  
-Pixel3:
-  ldy #$00
-  lda CurrentColor
-  and #$01
-  beq HiPixelByte
-  lda #%1000000
-  sta ColorWorkValue
-  lda (Vram_Lo), y
-  ora ColorWorkValue
-  sta (Vram_Lo), y
-HiPixelByte:
-  lda CurrentColor
-  and #%10
-  beq EndPixel3
-  lda #%0000001
-  sta ColorWorkValue
-  iny
-  lda (Vram_Lo), y
-  ora ColorWorkValue
-  sta (Vram_Lo), y
-EndPixel3:
-  rts
 
+WritePixelValue:
+  lda #$00
+  sta VramWork
+  lda CurrentColor
+  and #$7f
+  sta ColorWorkValue
+  jsr ResetPaletteBit
+  lda PixelLoc
+  tay
+  cmp #$03
+  bne SinglePixelByteWrite
+  jmp DoPixel3
+  
+SinglePixelByteWrite:
+  lsr
+  lsr
+  sta VramOffset
+  tya
+  and #$03
+  beq WorkValueOffset
+  tax
+  sta VramWork
+  lda ColorWorkValue  
+DoColorWorkValueCalc:
+  asl
+  asl
+  dex
+  bne DoColorWorkValueCalc
+  sta ColorWorkValue
+WorkValueOffset:
+  lda VramOffset
+  beq BitMaskCalcSetup
+  lda ColorWorkValue
+  asl
+  sta ColorWorkValue
+  ;asl ColorWorkValue
+BitMaskCalcSetup:
+  lda #$03
+  ldx VramWork
+  beq BitMaskCalc
+BitMaskShift:
+  asl
+  asl
+  dex
+  bne BitMaskShift
+BitMaskCalc:
+  eor #$ff
+  ldy VramOffset
+  beq ApplyBitMask
+  sec
+  rol
+ApplyBitMask:
+  and (Vram_Lo), y
+  ora ColorWorkValue
+  sta (Vram_Lo), y
+  rts
+  
 ;************************************************************
 ; END WritePixelValue
 ;************************************************************  
 
 
 ;************************************************************
+; DoPixel3
+;
+;
+;************************************************************  
+
+DoPixel3:
+  lda #$fe
+  ldy #$01
+  and (Vram_Lo), y
+  sta VramWork
+  lda ColorWorkValue
+  clc
+  ror
+  ora VramWork
+  sta (Vram_Lo), y
+  dey
+  tya
+  ror
+  lsr
+  sta VramWork
+  lda #$bf
+  and (Vram_Lo), y
+  ora VramWork
+  sta (Vram_Lo), y
+  rts
+
+;************************************************************
+; END DoPixel3
+;************************************************************  
+
+
+;************************************************************
+; ResetPaletteBit
+; (destroys A, Y)
+;
+; Set the high bit of both bytes of the current blop to 
+; that of the new color, and register the new color as the
+; current color.
+;************************************************************  
+
+ResetPaletteBit:
+  lda ColorPending
+  ;cmp CurrentColor
+  ;beq EndPaletteBitChange
+  sta CurrentColor
+  and #$80
+  sta VramWork
+  ldy #$01
+ResetPaletteBitLoop:
+  lda (Vram_Lo), y
+  and #$7f
+  ora VramWork
+  sta (Vram_Lo), y
+  dey
+  bpl ResetPaletteBitLoop
+EndPaletteBitChange:
+  rts
+  
+
+;************************************************************
+; END ResetPaletteBit
+;************************************************************  
+
+
+
+;************************************************************
 ; ReadKeyboard
 ;
-; (destroys A,X)
-;   really should be called MenuHandler, I guess, since that's
-;   what this does. reads the keyboard read register to see
-;   if bit 7 is set; if so, handle whatever key was pressed,
-;   if known.
+; (destroys A)
+;   reads the keyboard read register to see if bit 7 is set; 
+;   if so, handle whatever key was pressed, if a known input.
 ;************************************************************  
 
 ReadKeyboard:
   lda KEYBOARD_READ
   sta KeyboardValue
   and #$80
-  bne ProcessKeyboard
   rts
 
 ;************************************************************
@@ -459,16 +538,20 @@ ReadKeyboard:
   
 
 ;************************************************************
-; ProcessKeyboard
+; MenuHandler
 ;
 ; (destroys A,X)
-;   handles keyboard input. the handler branches should really
-;   be subroutines, I guess, since if there winds up being a
-;   lot of them and they're lengthy, then we risk going out of
-;   page and branching to something insane
+;   handles keyboard input. handler branches to subroutines
+;   for easier... well, handling.
+;
+;   words start getting really difficult once you're doing 6502
+;   for most of a night ^_^
 ;************************************************************  
   
-ProcessKeyboard:
+MenuHandler:
+  bne DoMenuHandle
+  rts
+DoMenuHandle:  
   lda KeyboardValue
   and #$7f
   cmp #$49  ; 'I' = move up
@@ -486,20 +569,23 @@ IsDown:
   cmp #$4D  ; 'M' = move down
   bne IsColorChange
   jmp MoveDown
-IsColorChange:  
-;  cmp #$30
-;  beq ChangeToBlack
-;  cmp #$31
-;  beq ChangeToMagenta
-;  cmp #$32
-;  beq ChangeToGreen
-;  cmp #$33
-;  beq ChangeToWhite
-;  cmp #$34
-;  beq ChangeToBlue
-;  cmp #$35
-;  beq ChangeToOrange
+IsColorChange:
+  cmp #$43
+  bne InputOver
+  jmp DisplayColorChangePrompt
+InputOver:
   rts
+
+;************************************************************
+; END MenuHandler
+;************************************************************
+
+
+;************************************************************
+; MoveUp
+;
+; (destroys A, X, Y)
+;************************************************************  
   
 MoveUp:
   ldx PositionY
@@ -511,6 +597,17 @@ MoveUp:
   jsr WritePixelValue
 EndMoveUp:  
   rts
+
+;************************************************************
+; END MoveUp
+;************************************************************
+
+
+;************************************************************
+; MoveDown
+;
+; (destroys A, X, Y)
+;************************************************************  
   
 MoveDown:
   ldx PositionY
@@ -523,6 +620,17 @@ MoveDown:
 EndMoveDown:
   rts
 
+;************************************************************
+; END MoveDown
+;************************************************************
+
+
+;************************************************************
+; MoveLeft
+;
+; (destroys A, X, Y)
+;************************************************************  
+  
 MoveLeft:  
   ldx PositionX
   beq EndMoveLeft
@@ -532,7 +640,18 @@ MoveLeft:
   jsr WritePixelValue
 EndMoveLeft:
   rts
-  
+
+;************************************************************
+; END MoveUp
+;************************************************************
+
+
+;************************************************************
+; MoveRight
+;
+; (destroys A, X, Y)
+;************************************************************
+
 MoveRight:
   ldx PositionX
   inx 
@@ -544,3 +663,200 @@ MoveRight:
 EndMoveRight:
   rts
   
+;************************************************************
+; END MoveUp
+;************************************************************
+
+  
+;************************************************************
+; DisplayColorChangePrompt
+;
+; (destroys A, X, Y)
+;************************************************************
+
+DisplayColorChangePrompt:
+  lda GRAPHICS_OFF
+; write first line of message  
+  lda #$00
+  sta LineNumber
+  jsr DetermineTextAreaAddr
+  lda #<ColorMessageLine1
+  sta TextPtr_Lo
+  lda #>ColorMessageLine1
+  sta TextPtr_Hi
+  jsr WriteLine
+
+; next line of message  
+  lda #$01
+  sta LineNumber
+  jsr DetermineTextAreaAddr
+  lda #<ColorMessageLine2
+  sta TextPtr_Lo
+  lda #>ColorMessageLine2
+  sta TextPtr_Hi
+  jsr WriteLine  
+  
+; write prompt  
+  lda #$02
+  sta LineNumber
+  jsr DetermineTextAreaAddr
+  lda #<ColorPrompt
+  sta TextPtr_Lo
+  lda #>ColorPrompt
+  sta TextPtr_Hi
+  jsr WriteLine
+  jsr WritePrompt
+ColorPromptLoop:
+  sta KEYBOARD_STROBE
+  jsr Delay
+  jsr ReadKeyboard
+  jsr HandleColorMenu
+  lda KeyboardValue
+  and #$80
+  beq ColorPromptLoop
+  sta KEYBOARD_STROBE
+  lda GRAPHICS_ON
+  rts
+
+;************************************************************
+; END DisplayColorChangePrompt
+;************************************************************
+
+  
+HandleColorMenu:
+  bne DoColorMenu
+  rts
+DoColorMenu:  
+  lda KeyboardValue
+  and #$7f
+ChangeIsBlack:  
+  cmp #$42
+  bne ChangeIsWhite
+  jsr ChangeColorBlack
+ChangeIsWhite:
+  cmp #$57
+  bne ChangeIsMagenta
+  jsr ChangeColorWhite
+ChangeIsMagenta:
+  cmp #$4d
+  bne ChangeIsGreen
+  jsr ChangeColorMagenta
+ChangeIsGreen:
+  cmp #$47
+  bne ChangeIsBlue
+  jsr ChangeColorGreen
+ChangeIsBlue:
+  cmp #$4c
+  bne ChangeIsOrange
+  jsr ChangeColorBlue
+ChangeIsOrange:
+  cmp #$4f
+  bne ChangeIsOver
+  jsr ChangeColorOrange
+ChangeIsOver:
+  rts
+  
+ChangeColorBlack:
+  lda #$00
+  sta ColorPending
+  rts
+  
+ChangeColorWhite:
+  lda #$03
+  sta ColorPending
+  rts
+
+ChangeColorMagenta:
+  lda #$01
+  sta ColorPending
+  rts
+  
+ChangeColorGreen:
+  lda #$02
+  sta ColorPending
+  rts
+
+ChangeColorBlue:
+  lda #$81
+  sta ColorPending
+  rts
+
+ChangeColorOrange:
+  lda #$82
+  sta ColorPending
+  rts  
+  
+ClearTextArea:
+  lda #SPACE
+  tax
+ClearLoop:
+  sta $0400,x
+  sta $0500,x
+  sta $0600,x
+  sta $0700,x
+  inx
+  bne ClearLoop
+  rts  
+
+
+  
+; usage: write address of text data ptr to TextPtr, then call
+WriteLine:
+  ldy #$00
+CopyText:
+  lda (TextPtr_Lo), y
+  beq CopyIsOver
+  sta (TextAddr_Lo), y
+  iny
+  cpy #$25
+  bne CopyText
+CopyIsOver:  
+  rts
+ 
+WritePrompt:
+  lda #COLON
+  sta (TextAddr_Lo), y
+  iny
+  lda #SPACE
+  sta (TextAddr_Lo), y
+  iny
+  lda #BLINKY_SPACE
+  sta (TextAddr_Lo), y
+  rts  
+
+DetermineTextAreaAddr:
+  lda #MIXED_TEXT_HI
+  sta TextAddr_Hi
+  lda #MIXED_TEXT_LO
+  sta TextAddr_Lo
+  ldx LineNumber
+  beq EndDetermineTextAreaAddr
+AddTextLineOffset:
+  clc
+  adc #$80
+  sta TextAddr_Lo
+  bcc ToNextAdd
+  inc TextAddr_Hi
+ToNextAdd:  
+  dex
+  bne AddTextLineOffset
+EndDetermineTextAreaAddr:  
+  rts
+  
+; data
+ColorPrompt:
+;COLOR: (blinky space)
+.byte   $83, $8F, $8C, $8F, $92, $00
+
+ColorMessageLine1:
+;(B)LACK  (W)HITE (M)AGENTA
+.byte   $A8, $C2, $A9, $CC, $C1, $C3, $CB, $A0
+.byte   $A0, $A8, $D7, $A9, $C8, $C9, $D4, $C5
+.byte   $A0, $A8, $CD, $A9, $C1, $C7, $C5, $CE
+.byte   $D4, $C1, $00
+
+ColorMessageLine2:
+;(G)REEN B(L)UE (O)RANGE
+.byte   $A8, $C7, $A9, $D2, $C5, $C5, $CE, $A0
+.byte   $C2, $A8, $CC, $A9, $D5, $C5, $A0, $A8
+.byte   $CF, $A9, $D2, $C1, $CE, $C7, $C5, $00  
