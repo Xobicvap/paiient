@@ -15,7 +15,13 @@
 .importzp Remainder
 
 
-
+;************************************************************
+; DivideBy7WithRemainder
+; (destroys A, X, Y)
+;
+;   quick and dirty division routine to get X position
+;   and the pixel being affected
+;************************************************************  
 
 DivideBy7WithRemainder:
   tay
@@ -41,7 +47,38 @@ DivideBy7WithRemainder:
   tax
   sta Remainder
   rts
-  
+
+;************************************************************
+; END DivideBy7WithRemainder
+;************************************************************   
+
+
+;************************************************************
+; SafeSubtract
+; (destroys A, X, Y)
+;
+;   subtraction without having to worry about negatives
+;   
+;************************************************************  
+
+SafeSubtract:
+  lda Subtrahend
+  sec
+  sbc Minuend
+  bcs CarryS
+  sta Subtrahend
+  lda #$ff
+  sec
+  sbc Subtrahend
+  tax
+  inx
+  txa
+CarryS:
+  rts
+
+;************************************************************
+; END DivideBy7WithRemainder
+;************************************************************   
   
 TimesTable7:
 .byte  $00, $07, $0E, $15, $1C, $23, $2A, $31, $38, $3F

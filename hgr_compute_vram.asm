@@ -16,6 +16,8 @@
 .importzp Vram_Hi
 .importzp PixelLoc
 .importzp Result
+.importzp VRAM_ADDR_HI
+.importzp VRAM_ADDR_LO
 .import LookupOffsetLo
 .import LookupOffsetHi
 .import DivideBy7WithRemainder
@@ -115,9 +117,9 @@ ComputeXPosition:
 ;************************************************************  
   
 ComputeVRAMAddress:
-  lda #$20
+  lda #VRAM_ADDR_HI
   sta Vram_Hi
-  lda #$00
+  lda #VRAM_ADDR_LO
   sta Vram_Lo
   jsr ComputeYPosition
   jsr ComputeXPosition

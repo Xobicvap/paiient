@@ -23,13 +23,8 @@
 
 .exportzp CENTER_X
 .exportzp CENTER_Y
-.exportzp PIXEL_DIVISOR
 .exportzp VRAM_ADDR_HI
 .exportzp VRAM_ADDR_LO
-.exportzp BLACK
-.exportzp COLOR1
-.exportzp COLOR2
-.exportzp WHITE
 .exportzp MIXED_TEXT_LO
 .exportzp MIXED_TEXT_HI
 .exportzp BLINKY_SPACE
@@ -42,29 +37,17 @@
 .exportzp TextAddr_Hi
 .exportzp LineNumber
 
-.exportzp BoxAddrOffset_Lo
-.exportzp BoxAddrOffset_Hi
-.exportzp BoxSetStart_Lo
 .exportzp VramOffset
 .exportzp LineOffset
 .exportzp VramWork
 .exportzp LineInBox
 
 .exportzp Result
-.exportzp Product_Hi
 .exportzp Remainder
-.exportzp Product_Lo
-.exportzp Multiplicand1
-.exportzp Divisor
-.exportzp Multiplicand2
+.exportzp Minuend
+.exportzp Subtrahend
 
 .exportzp BackupColor
-.exportzp X_Left
-.exportzp X_Right
-.exportzp Y_Up
-.exportzp Y_Down
-.exportzp Start_X
-.exportzp Start_Y
 
 .exportzp Vram_Lo
 .exportzp Vram_Hi
@@ -90,18 +73,25 @@ HIRES_ON          = $C057
 ; thus, center of screen is 70 (46), 96 (5f)
 CENTER_X          = $46
 CENTER_Y          = $5F
-PIXEL_DIVISOR     = $07
 VRAM_ADDR_HI      = $20
 VRAM_ADDR_LO      = $00
-BLACK             = $00
-COLOR1            = $01
-COLOR2            = $02
-WHITE             = $03
 MIXED_TEXT_LO     = $50
 MIXED_TEXT_HI     = $06
 BLINKY_SPACE      = $60
 SPACE             = $A0
 COLON             = $BA
+
+
+; zero page RAM locations
+BackupColor       = $07
+VramOffset        = $08
+LineOffset        = $09
+VramWork          = $09
+
+Result            = $50
+Remainder         = $51
+Minuend           = $52
+Subtrahend        = $53
 
 ; text variables
 TextPtr_Lo        = $C0
@@ -109,34 +99,6 @@ TextPtr_Hi        = $C1
 TextAddr_Lo       = $C2
 TextAddr_Hi       = $C3
 LineNumber        = $C4
-
-
-; zero page RAM locations
-BoxAddrOffset_Lo  = $06
-BoxAddrOffset_Hi  = $07
-BoxSetStart_Lo    = $08
-VramOffset        = $08
-LineOffset        = $09
-VramWork          = $09
-LineInBox         = $1E
-
-; storage for math routines; some are conserved to save ZP space
-Result            = $50
-Product_Hi        = $51
-Remainder         = $52
-Product_Lo        = $53
-Multiplicand1     = $53
-Divisor           = $54
-Multiplicand2     = $55
-
-BackupColor       = $C0
-X_Left            = $C1
-X_Right           = $C2
-Y_Up              = $C3
-Y_Down            = $C4
-Start_X           = $C5
-Start_Y           = $C6
-
 
 Vram_Lo           = $EB
 Vram_Hi           = $EC
