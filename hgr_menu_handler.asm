@@ -233,10 +233,13 @@ DrawLineHandler:
   lda PositionY
   sta LineEndY
 DoLineMenuHandle: 
-  lda #$00
-  sta KEYBOARD_STROBE
-  jsr Delay
   jsr ReadKeyboard
+; was there a keyboard hit that was processed?  
+  lda KeyboardValue
+  and #$80
+  beq NoKBHit
+  jsr Delay
+  sta KEYBOARD_STROBE
   lda KeyboardValue
   and #$7f
   cmp #$49  ; 'I' = move up
@@ -263,6 +266,7 @@ IsLineEnd:
 ;  sta BackupColor
 ;  bne NotBlack
 ;  lda #$00
+NoKBHit:
   jmp DoLineMenuHandle
 EndLine:
   rts
