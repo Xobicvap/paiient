@@ -40,7 +40,6 @@
 .exportzp VramOffset
 .exportzp LineOffset
 .exportzp VramWork
-;.exportzp LineInBox
 
 .exportzp IncVal
 .exportzp LineEndX

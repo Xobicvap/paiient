@@ -16,6 +16,10 @@
 .import DeltaCalculation
 .export DrawLine
 .importzp IncVal
+.importzp Interchange
+.importzp BresTerm_A
+.importzp BresTerm_B
+.importzp BresError
 .importzp BackupX
 .importzp BackupY
 .importzp PositionY
@@ -23,13 +27,16 @@
 .importzp LineEndX
 .importzp LineEndY
 .importzp Word1
+.importzp Word2
 .importzp DeltaX
+.importzp DeltaXSign
+.importzp DeltaYSign
 .importzp DeltaY
-.importzp DeltaX2
-.importzp DeltaY2
+.importzp DeltaXTimes2
+.importzp DeltaYTimes2
 .importzp Temp1
 .importzp Temp2
-.importzp Delta
+.importzp Temp3
 
 
 ;************************************************************
