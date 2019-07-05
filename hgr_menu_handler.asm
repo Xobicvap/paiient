@@ -232,8 +232,8 @@ DrawLineHandler:
   sta LineEndX
   lda PositionY
   sta LineEndY
+DoLineMenuHandle: 
   lda #$00
-DoLineMenuHandle:  
   sta KEYBOARD_STROBE
   jsr Delay
   jsr ReadKeyboard
