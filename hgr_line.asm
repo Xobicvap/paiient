@@ -23,21 +23,13 @@
 .importzp LineEndX
 .importzp LineEndY
 .importzp Word1
-.importzp Word2
 .importzp DeltaX
 .importzp DeltaY
-.importzp DeltaXTimes2
-.importzp DeltaYTimes2
-.importzp DeltaXSign
-.importzp DeltaYSign
+.importzp DeltaX2
+.importzp DeltaY2
 .importzp Temp1
 .importzp Temp2
-.importzp Temp3
 .importzp Delta
-.importzp Interchange
-.importzp BresTerm_A
-.importzp BresTerm_B
-.importzp BresError
 
 
 ;************************************************************
@@ -116,6 +108,8 @@ SetupDeltas:
 ;************************************************************
 HorizontalLine:
   ; delta y is zero
+  lda PositionX
+  sta BackupX
   lda #$01
   sta IncVal
   lda DeltaXSign
@@ -124,16 +118,8 @@ HorizontalLine:
   bpl DrawHorizontal
   lda #$FF
   sta IncVal
-  clc
-  ; subtract 1 from line end x since we are drawing right to left
-  ; the subtraction / addition is to use a beq for simplicity's sake
-  ; but also keep the line going to the specified end
-  adc LineEndX
-  sta LineEndX
 DrawHorizontal:
   lda PositionX
-  sta BackupX
-  ; Y position will stay the same so no need to back it up
   clc
   adc IncVal
   sta PositionX
@@ -164,18 +150,16 @@ VerticalLine:
   ; other alternative is to use indirection etc and that's slower
   ; this whole project is an attempt at speed being more important
   ; than code size
+  lda PositionY
+  sta BackupY
   lda #$01
   sta IncVal
   lda DeltaYSign
   bpl DrawVertical
   lda #$FF
   sta IncVal
-  clc
-  adc LineEndY
-  sta LineEndY
 DrawVertical:
   lda PositionY
-  sta BackupY
   clc
   adc IncVal
   sta PositionY
@@ -183,6 +167,8 @@ DrawVertical:
   beq EndVertical
   jsr ComputeVRAMAddress
   jsr WritePixelValue
+  clc
+  bcc DrawVertical
 EndVertical:
   lda BackupY
   sta PositionY
@@ -202,7 +188,6 @@ EndVertical:
 
 BresenhamLineDraw:
   lda #$00
-  ;@TODO: alias Temp3 to Interchange
   sta Temp3
   lda DeltaY
   cmp DeltaX
