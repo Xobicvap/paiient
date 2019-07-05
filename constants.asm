@@ -40,12 +40,32 @@
 .exportzp VramOffset
 .exportzp LineOffset
 .exportzp VramWork
-.exportzp LineInBox
+;.exportzp LineInBox
+
+.exportzp IncVal
+.exportzp LineEndX
+.exportzp LineEndY
+.exportzp DeltaX
+.exportzp DeltaY
+.exportzp DeltaXTimes2
+.exportzp DeltaYTimes2
+.exportzp Interchange
+.exportzp BackupX
+.exportzp BackupY
+.exportzp DeltaXSign
+.exportzp DeltaYSign
 
 .exportzp Result
 .exportzp Remainder
-.exportzp Minuend
-.exportzp Subtrahend
+.exportzp Temp1
+.exportzp Temp2
+.exportzp Temp3
+.exportzp Word1
+.exportzp Word2
+
+.exportzp BresTerm_A
+.exportzp BresTerm_B
+.exportzp BresError
 
 .exportzp BackupColor
 
@@ -90,8 +110,27 @@ VramWork          = $09
 
 Result            = $50
 Remainder         = $51
-Minuend           = $52
-Subtrahend        = $53
+Word1             = $50
+Temp1             = $51  ; also high byte of Word1
+Word2             = $52
+Temp2             = $53  ; also high byte of Word2
+
+
+IncVal            = $54
+LineEndX          = $55
+LineEndY          = $56
+DeltaX            = $57  
+DeltaY            = $58
+Interchange       = $59
+Temp3             = $59
+DeltaXTimes2      = $5A
+DeltaYTimes2      = $5C
+DeltaXSign        = $5E
+DeltaYSign        = $5F
+
+BresTerm_A        = $5C
+BresTerm_B        = $60
+BresError         = $62
 
 ; text variables
 TextPtr_Lo        = $C0
@@ -109,6 +148,8 @@ CurrentColor      = $FA
 ColorWorkValue    = $FB
 ColorPending      = $FC
 KeyboardValue     = $FD
+BackupX           = $FE
+BackupY           = $FF
 
 ; data
 LookupOffsetLo:

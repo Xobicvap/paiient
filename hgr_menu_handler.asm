@@ -22,9 +22,12 @@
 .import HandleColorMenu
 .import ReadKeyboard
 .import DetermineTextAreaAddr
+.import DrawLine
 .importzp KeyboardValue
 .importzp PositionX
 .importzp PositionY
+.importzp LineEndX
+.importzp LineEndY
 .importzp LineNumber
 .importzp TextPtr_Lo
 .importzp TextPtr_Hi
@@ -63,8 +66,12 @@ IsDown:
   jmp MoveDown
 IsColorChange:
   cmp #$43
-  bne InputOver
+  bne IsDrawLine
   jmp DisplayColorChangePrompt
+IsDrawLine:
+  cmp #$4C
+  bne InputOver
+  jmp DrawLineHandler
 InputOver:
   rts
 
@@ -213,3 +220,87 @@ ColorPromptLoop:
 ;************************************************************
 ; END DisplayColorChangePrompt
 ;************************************************************
+
+
+;************************************************************
+; DrawLineHandler
+;
+;   handles... drawing lines!
+;************************************************************
+DrawLineHandler:
+  lda PositionX
+  sta LineEndX
+  lda PositionY
+  sta LineEndY
+  lda #$00
+DoLineMenuHandle:  
+  sta KEYBOARD_STROBE
+  jsr Delay
+  jsr ReadKeyboard
+  lda KeyboardValue
+  and #$7f
+  cmp #$49  ; 'I' = move up
+  bne IsLineLeft
+  jmp MoveLineUp
+IsLineLeft:
+  cmp #$4A  ; 'J' = move left
+  bne IsLineRight
+  jmp MoveLineLeft
+IsLineRight:  
+  cmp #$4B  ; 'K' = move right
+  bne IsLineDown
+  jmp MoveLineRight
+IsLineDown:  
+  cmp #$4D  ; 'M' = move down
+  bne IsLineEnd
+  jmp MoveLineDown
+IsLineEnd:
+  cmp #$45  ; 'E' = line stop
+  beq EndLine
+; ugh! this won't work... we need to detect what colors are underneath where the
+; line is being drawn!
+;  lda CurrentColor
+;  sta BackupColor
+;  bne NotBlack
+;  lda #$00
+  jmp DoLineMenuHandle
+EndLine:
+  rts
+
+MoveLineUp:
+  ldx LineEndY
+  beq NoMoveUp
+  dex
+  stx LineEndY
+  jsr DrawLine
+NoMoveUp:
+  jmp DoLineMenuHandle
+
+MoveLineLeft:
+  ldx LineEndX
+  beq NoMoveLeft
+  dex
+  stx LineEndX
+  jsr DrawLine
+NoMoveLeft:
+  jmp DoLineMenuHandle
+
+MoveLineDown:
+  ldx LineEndY
+  cpx #$BF
+  beq NoMoveDown
+  inx
+  stx LineEndY
+  jsr DrawLine
+NoMoveDown:
+  jmp DoLineMenuHandle
+
+MoveLineRight:
+  ldx LineEndX
+  cpx #$8B
+  beq NoMoveRight
+  inx
+  stx LineEndX
+  jsr DrawLine
+NoMoveRight:
+  jmp DoLineMenuHandle
