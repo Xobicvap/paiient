@@ -1,1 +1,5 @@
 *.o
+*.txt
+!paiient.dsk
+*.dsk
+scratch/

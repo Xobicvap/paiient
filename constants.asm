@@ -90,6 +90,8 @@ HIRES_ON          = $C057
 
 ; HGR screen is, once again, 140 x 192 (0-139, 0-191)
 ; thus, center of screen is 70 (46), 96 (5f)
+; (these should move to hgr constants. 
+; also, these are constants, not zp locations.)
 CENTER_X          = $46
 CENTER_Y          = $5F
 VRAM_ADDR_HI      = $20
@@ -102,26 +104,38 @@ COLON             = $BA
 
 
 ; zero page RAM locations
+; monitor uses: $20-3F, $40-49, $4E, $4F, $50-55 (ugh)
+; dos 3.3 uses (hex assumed): 26, 27, 2A-2F, 35-39, 
+; 40-48, 4A-4D, 67-6A, 6F, 70, AF, B0, CA-CD, D8
+;
+; so. to be totally safe, let's not use:
+; 20-55, 67, 6A, 6F, 70, AF, B0, CA-CD, D8
+;
+; FREE MEMORY then is: 
+; 00-1F, 56-66, 68-69, 6B-6E, 71-AE, B1-C9, CE-D7,
+; D9-FF
 BackupColor       = $07
 VramOffset        = $08
 LineOffset        = $09
 VramWork          = $09
 
-Result            = $50
-Remainder         = $51
-Word1             = $50
-Temp1             = $51  ; also high byte of Word1
-Word2             = $52
-Temp2             = $53  ; also high byte of Word2
+Result            = $10
+Remainder         = $11
+Word1             = $10
+Temp1             = $11  ; also high byte of Word1
+Word2             = $12
+Temp2             = $13  ; also high byte of Word2
 
 
-IncVal            = $54
-LineEndX          = $55
-LineEndY          = $56
-DeltaX            = $57  
-DeltaY            = $58
-Interchange       = $59
-Temp3             = $59
+IncVal            = $14
+LineEndX          = $15
+LineEndY          = $16
+DeltaX            = $17  
+DeltaY            = $18
+Interchange       = $19
+Temp3             = $19
+MenuLo            = $1A
+MenuHi            = $1B
 DeltaXTimes2      = $5A
 DeltaYTimes2      = $5C
 DeltaXSign        = $5E
@@ -153,9 +167,6 @@ BackupY           = $FF
 ; data
 LookupOffsetLo:
 .byte   $00, $28, $50
-
-LookupOffsetHi:
-.byte   $00, $04, $08, $0C, $10, $14, $18, $1C
 
 ColorPrompt:
 ;COLOR: (blinky space)
